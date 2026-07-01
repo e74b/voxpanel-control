@@ -5,15 +5,16 @@ import logging
 import json
 import uuid
 import time
+from config import (
+        RABBITMQ_URL,
+        CONTROL_EXCHANGE,
+        AGENT_GLOBAL,
+        AGENT_PRIVATE
+        )
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("control")
-
-CONTROL_EXCHANGE = "control"
-AGENT_GLOBAL = "agent-global"
-AGENT_PRIVATE = "agent-private"
-RABBITMQ_URL = "amqp://default:password@127.0.0.1" # todo: move into .env
 
 @dataclass()
 class LoginRequest:
