@@ -111,6 +111,8 @@ async def healthcheck():
             state.agents.pop(token)
             # TODO: notify control nodes to rebuild their responsibilities and resource pool
 
+    await channel.close()
+
 async def healthcheck_task():
     await state.init_done.wait()
     while True:
