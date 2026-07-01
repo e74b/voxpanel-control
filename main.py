@@ -9,7 +9,10 @@ from config import (
         RABBITMQ_URL,
         CONTROL_EXCHANGE,
         AGENT_GLOBAL,
-        AGENT_PRIVATE
+        AGENT_PRIVATE,
+        PING_TIMEOUT,
+        PING_INTERVAL,
+        AGENT_OFFLINE_TIMEOUT
         )
 
 
@@ -90,7 +93,7 @@ async def healthcheck():
         await exchange.publish(ping_message, agent.routing_key)
         await state.submit_request(correlation_id, PingRequest(response_queue, token))
 
-    await asyncio.sleep(5)
+    await asyncio.sleep(PING_TIMEOUT)
     response_queue.shutdown(immediate=False)
     while True:
         try:
@@ -103,7 +106,7 @@ async def healthcheck():
         await state.close_request(uuid_map[token])
         time_s = time.monotonic() - agent.last_ping
         logger.warning(f"agent `{agent.name}` missed ping. last ping was {time_s:.2f}s ago")
-        if time_s > 60:
+        if time_s > AGENT_OFFLINE_TIMEOUT:
             logger.info(f"agent {agent.name} is now considered to be offline")
             state.agents.pop(token)
             # TODO: notify control nodes to rebuild their responsibilities and resource pool
@@ -111,7 +114,7 @@ async def healthcheck():
 async def healthcheck_task():
     await state.init_done.wait()
     while True:
-        # await asyncio.sleep(1)
+        await asyncio.sleep(PING_INTERVAL)
         await healthcheck()
 
 async def handle_login(message: abc.AbstractIncomingMessage, body: dict):
