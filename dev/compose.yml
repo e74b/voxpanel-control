@@ -1,0 +1,31 @@
+
+
+services:
+  rabbitmq:
+    image: rabbitmq:management
+    environment:
+      - RABBITMQ_DEFAULT_USER=default
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_DEFAULT_VHOST=voxpanel
+
+    ports:
+      - 5672:5672
+      - 15672:5672
+
+  posgtres:
+    image: postgres:alpine
+    shm_size: 128mb
+    environment:
+      - POSTGRES_DB=voxpanel
+      - POSTGRES_USER=default
+      - POSTGRES_PASSWORD=password
+      - PGDATA=/data
+    volumes:
+      postgres-dev:/data
+    ports:
+      - 5432:5432
+
+volumes:
+  postgres-dev:
+
+

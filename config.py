@@ -29,3 +29,7 @@ if "RABBITMQ_URL" not in os.environ:
 
 RABBITMQ_URL = os.environ["RABBITMQ_URL"]
 
+if "POSTGRES_URL" not in os.environ:
+    logger.error("no `POSTGRES_URL` environment variable")
+
+POSTGRES_URL = os.environ["POSTGRES_URL"]

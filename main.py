@@ -14,7 +14,7 @@ from config import (
         PING_INTERVAL,
         AGENT_OFFLINE_TIMEOUT
         )
-
+from piccolo.engine import engine_finder
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("control")
@@ -158,7 +158,14 @@ async def on_message(message: abc.AbstractIncomingMessage):
 
         await state.open_requests[message.correlation_id].resolve(body, message.correlation_id)
 
+async def test_db_connect():
+    engine = engine_finder()
+    # TODO: Add schema tests, etc.
+    await engine.start_connection_pool()
+    await engine.close_connection_pool()
+
 async def main():
+    await test_db_connect()
     state.connection = await connect_robust(RABBITMQ_URL)
     channel = await state.connection.channel()
     control_exc = await channel.declare_exchange(CONTROL_EXCHANGE, ExchangeType.TOPIC, arguments={
