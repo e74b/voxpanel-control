@@ -22,7 +22,7 @@ async def create_new_user(username: str, password: str, scopes: list[str] | None
         UniqueViolationError: username taken
     """
     db = engine_finder()
-    transaction = db.transaction()
+    transaction = db.atomic()
     hashed_password = hasher.hash(password)
     user = User(username=username, password=hashed_password)
     transaction.add(User.insert(user))
