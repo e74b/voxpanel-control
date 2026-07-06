@@ -13,6 +13,7 @@ TimeSecond = NewType("TimeSecond", int)
 CONTROL_EXCHANGE = "control"
 AGENT_GLOBAL = "agent-global"
 AGENT_PRIVATE = "agent-private"
+DEFAULT_USER_SCOPES = ["user:test"]
 
 # time between pings
 PING_INTERVAL: TimeSecond = 12
@@ -33,3 +34,4 @@ if "POSTGRES_URL" not in os.environ:
     logger.error("no `POSTGRES_URL` environment variable")
 
 POSTGRES_URL = os.environ["POSTGRES_URL"]
+
