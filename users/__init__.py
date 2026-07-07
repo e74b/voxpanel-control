@@ -1,6 +1,7 @@
 from .tables import User, Scope
 from pwdlib import PasswordHash
 from asyncpg.exceptions import UniqueViolationError
+from sqlite3 import IntegrityError
 from config import DEFAULT_USER_SCOPES
 from piccolo.engine import engine_finder
 from .exceptions import (
@@ -41,7 +42,7 @@ async def create_new_user(username: str, password: str, scopes: list[str] | None
 
     try:
         await transaction.run() # May raise UniqueViolationError
-    except UniqueViolationError:
+    except (UniqueViolationError, IntegrityError):
         raise UserExists()
 
 async def authenticate_user(username: str, password: str) -> list[str]:

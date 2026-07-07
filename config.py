@@ -35,3 +35,9 @@ if "POSTGRES_URL" not in os.environ:
 
 POSTGRES_URL = os.environ["POSTGRES_URL"]
 
+class Env:
+    DEV = "dev"
+    TEST = "test"
+    PROD = "prod"
+ENV = os.environ.get("ENV", Env.DEV)
+
