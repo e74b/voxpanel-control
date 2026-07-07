@@ -3,7 +3,10 @@ from pwdlib import PasswordHash
 from asyncpg.exceptions import UniqueViolationError
 from config import DEFAULT_USER_SCOPES
 from piccolo.engine import engine_finder
-
+from .exceptions import (
+        UserNotExists,
+        InvalidPassword
+        )
 hasher = PasswordHash.recommended()
 
 async def create_new_user(username: str, password: str, scopes: list[str] | None = None) -> None:
@@ -37,7 +40,32 @@ async def create_new_user(username: str, password: str, scopes: list[str] | None
 
     await transaction.run() # May raise UniqueViolationError
 
-def authenticate_user(): ...
+async def authenticate_user(username: str, password: str) -> list[str]:
+    """
+    Authenticate an existing user and return all granted scopes.
+
+    Args:
+        username: username to authenticate
+        password: unhashed plaintext password
+
+    Returns:
+        list[str]: granted scopes
+
+    Raises:
+        InvalidPassword: incorrect password given
+        UserNotExists: username not found in database
+    """
+
+    user = await User.objects().get(User.username == username)
+    if user is None:
+        raise UserNotExists()
+    if not hasher.verify(password, user.password):
+        raise InvalidPassword()
+
+    records = await Scope.select(Scope.scope).where(Scope.user == user)
+    return [record["scope"] for record in records]
+
+
 def grant_scope(): ...
 def revoke_scope(): ...
 def get_scopes(): ...

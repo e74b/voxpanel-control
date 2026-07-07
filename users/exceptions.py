@@ -1,0 +1,9 @@
+
+class InvalidPassword(Exception):
+    ...
+
+class UserNotExists(Exception):
+    ...
+
+class UserExists(Exception):
+    ...
