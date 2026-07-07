@@ -1,8 +1,7 @@
 import pytest
 import users
 from users.tables import User
-from users.exceptions import UserNotExists, InvalidPassword
-from asyncpg.exceptions import UniqueViolationError
+from users.exceptions import UserNotExists, InvalidPassword, UserExists
 
 @pytest.mark.asyncio
 async def test_user_signup():
@@ -10,7 +9,7 @@ async def test_user_signup():
 
     assert await User.exists().where(User.username == "test_username")
 
-    with pytest.raises(UniqueViolationError):
+    with pytest.raises(UserExists):
         await users.create_new_user("test_username", "test_password")
 
 @pytest.mark.asyncio

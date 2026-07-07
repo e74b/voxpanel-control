@@ -4,6 +4,7 @@ from asyncpg.exceptions import UniqueViolationError
 from config import DEFAULT_USER_SCOPES
 from piccolo.engine import engine_finder
 from .exceptions import (
+        UserExists,
         UserNotExists,
         InvalidPassword
         )
@@ -22,7 +23,7 @@ async def create_new_user(username: str, password: str, scopes: list[str] | None
         None
 
     Raises:
-        UniqueViolationError: username taken
+        UserExists: username taken
     """
     db = engine_finder()
     transaction = db.atomic()
@@ -38,7 +39,10 @@ async def create_new_user(username: str, password: str, scopes: list[str] | None
 
     transaction.add(Scope.insert(*scope_objs))
 
-    await transaction.run() # May raise UniqueViolationError
+    try:
+        await transaction.run() # May raise UniqueViolationError
+    except UniqueViolationError:
+        raise UserExists()
 
 async def authenticate_user(username: str, password: str) -> list[str]:
     """
