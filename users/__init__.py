@@ -71,6 +71,30 @@ async def authenticate_user(username: str, password: str) -> list[str]:
     return [record["scope"] for record in records]
 
 
-def grant_scope(): ...
+async def grant_scopes(username: str, scopes: str | list[str]):
+    """
+    Grant user permission to call all scope methods
+
+    Args:
+        username: username of user to grant the scope to
+        scopes: the scope or scopes to be granted
+
+    Returns:
+        None
+
+    Raises:
+        UserNotExists: username does not exist
+    """
+
+    user =  await User.objects().get(User.username == username)
+
+    if user is None:
+        raise UserNotExists()
+    if isinstance(scopes, str):
+        scopes = [scopes]
+
+    new_scopes = [Scope(user=user, scope=scope) for scope in scopes]
+    await Scope.insert(*new_scopes)
+
 def revoke_scope(): ...
 def get_scopes(): ...
