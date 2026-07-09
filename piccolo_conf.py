@@ -8,12 +8,8 @@ if ENV == Env.TEST:
     logging.getLogger("db").info("test environment detected: using sqlite")
     DB = SQLiteEngine()
 else:
-    DB = PostgresEngine(config={
-        "dsn": POSTGRES_URL
-    })
+    DB = PostgresEngine(config={"dsn": POSTGRES_URL})
 
 # A list of paths to piccolo apps
 # e.g. ['blog.piccolo_app']
-APP_REGISTRY = AppRegistry(apps=[
-    "users.piccolo_app"
-    ])
+APP_REGISTRY = AppRegistry(apps=["users.piccolo_app"])

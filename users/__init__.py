@@ -4,14 +4,14 @@ from asyncpg.exceptions import UniqueViolationError
 from sqlite3 import IntegrityError
 from config import DEFAULT_USER_SCOPES
 from piccolo.engine import engine_finder
-from .exceptions import (
-        UserExists,
-        UserNotExists,
-        InvalidPassword
-        )
+from .exceptions import UserExists, UserNotExists, InvalidPassword
+
 hasher = PasswordHash.recommended()
 
-async def create_new_user(username: str, password: str, scopes: list[str] | None = None) -> None:
+
+async def create_new_user(
+    username: str, password: str, scopes: list[str] | None = None
+) -> None:
     """
     Create a new user with default or specified scopes.
 
@@ -32,18 +32,16 @@ async def create_new_user(username: str, password: str, scopes: list[str] | None
     user = User(username=username, password=hashed_password)
     transaction.add(User.insert(user))
 
-    scope_strs =  DEFAULT_USER_SCOPES if scopes is None else scopes
-    scope_objs = [
-            Scope(user=user, scope=scope)
-            for scope in scope_strs
-            ]
+    scope_strs = DEFAULT_USER_SCOPES if scopes is None else scopes
+    scope_objs = [Scope(user=user, scope=scope) for scope in scope_strs]
 
     transaction.add(Scope.insert(*scope_objs))
 
     try:
-        await transaction.run() # May raise UniqueViolationError
+        await transaction.run()  # May raise UniqueViolationError
     except (UniqueViolationError, IntegrityError):
         raise UserExists()
+
 
 async def authenticate_user(username: str, password: str) -> list[str]:
     """
@@ -86,7 +84,7 @@ async def grant_scopes(username: str, scopes: str | list[str]):
         UserNotExists: username does not exist
     """
 
-    user =  await User.objects().get(User.username == username)
+    user = await User.objects().get(User.username == username)
 
     if user is None:
         raise UserNotExists()
@@ -96,12 +94,13 @@ async def grant_scopes(username: str, scopes: str | list[str]):
     new_scopes = [Scope(user=user, scope=scope) for scope in scopes]
     await Scope.insert(*new_scopes)
 
-async def revoke_scope(username: str, scopes: str | list[str]): 
+
+async def revoke_scope(username: str, scopes: str | list[str]):
     """
     Revoke user permission to call all scope methods
 
     If the scope or any of the provided scopes are not aldready granted,
-    the function will not raise an error. 
+    the function will not raise an error.
 
     Args:
         username: username of user to revoke scope from
@@ -114,7 +113,6 @@ async def revoke_scope(username: str, scopes: str | list[str]):
         UserNotExists: username
     """
 
-
     if isinstance(scopes, list):
         scopes = [scopes]
     # this is an extra db query
@@ -126,11 +124,13 @@ async def revoke_scope(username: str, scopes: str | list[str]):
     if not user_exists:
         raise UserNotExists()
 
-    result = await Scope.delete().where(
-            Scope.user.username == username
-        ).where(
-            Scope.scope.is_in(*scopes)
-        ).returning(Scope.scope)
+    result = (
+        await Scope.delete()
+        .where(Scope.user.username == username)
+        .where(Scope.scope.is_in(*scopes))
+        .returning(Scope.scope)
+    )
     return [record["scope"] for record in result]
+
 
 def get_scopes(): ...

@@ -19,10 +19,10 @@ DEFAULT_USER_SCOPES = ["user:test"]
 PING_INTERVAL: TimeSecond = 12
 
 # time to wait after ping emit, for responses
-PING_TIMEOUT : TimeSecond = 3
+PING_TIMEOUT: TimeSecond = 3
 
 # time after last ping, after which agent will be considered offline
-AGENT_OFFLINE_TIMEOUT: TimeSecond = 60 
+AGENT_OFFLINE_TIMEOUT: TimeSecond = 60
 
 if "RABBITMQ_URL" not in os.environ:
     logger.error("no `RABBITMQ_URL` environment variable")
@@ -35,9 +35,11 @@ if "POSTGRES_URL" not in os.environ:
 
 POSTGRES_URL = os.environ["POSTGRES_URL"]
 
+
 class Env:
     DEV = "dev"
     TEST = "test"
     PROD = "prod"
-ENV = os.environ.get("ENV", Env.DEV)
 
+
+ENV = os.environ.get("ENV", Env.DEV)

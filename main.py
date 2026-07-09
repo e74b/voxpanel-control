@@ -6,28 +6,31 @@ import json
 import uuid
 import time
 from config import (
-        RABBITMQ_URL,
-        CONTROL_EXCHANGE,
-        AGENT_GLOBAL,
-        AGENT_PRIVATE,
-        PING_TIMEOUT,
-        PING_INTERVAL,
-        AGENT_OFFLINE_TIMEOUT
-        )
+    RABBITMQ_URL,
+    CONTROL_EXCHANGE,
+    AGENT_GLOBAL,
+    AGENT_PRIVATE,
+    PING_TIMEOUT,
+    PING_INTERVAL,
+    AGENT_OFFLINE_TIMEOUT,
+)
 from piccolo.engine import engine_finder
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("control")
+
 
 @dataclass()
 class LoginRequest:
     Token: str
     Queue: str
 
+
 @dataclass()
 class LoginResponse:
     Success: bool
     Name: str
+
 
 @dataclass()
 class Agent:
@@ -35,8 +38,10 @@ class Agent:
     last_ping: int
     routing_key: str
 
-class OpenRequest():
+
+class OpenRequest:
     async def resolve(): ...
+
 
 class PingRequest(OpenRequest):
     def __init__(self, queue: asyncio.Queue, token: str):
@@ -71,7 +76,9 @@ class DaemonState:
     async def close_request(self, uuid: str):
         self.open_requests.pop(uuid)
 
+
 state = DaemonState()
+
 
 async def healthcheck():
     channel = await state.connection.channel()
@@ -85,10 +92,8 @@ async def healthcheck():
     for token, agent in to_check.items():
         correlation_id = uuid.uuid4().hex
         ping_message = Message(
-                ping_payload,
-                reply_to=state.reply_name,
-                correlation_id=correlation_id
-                )
+            ping_payload, reply_to=state.reply_name, correlation_id=correlation_id
+        )
         uuid_map[token] = correlation_id
         await exchange.publish(ping_message, agent.routing_key)
         await state.submit_request(correlation_id, PingRequest(response_queue, token))
@@ -105,7 +110,9 @@ async def healthcheck():
     for token, agent in to_check.items():
         await state.close_request(uuid_map[token])
         time_s = time.monotonic() - agent.last_ping
-        logger.warning(f"agent `{agent.name}` missed ping. last ping was {time_s:.2f}s ago")
+        logger.warning(
+            f"agent `{agent.name}` missed ping. last ping was {time_s:.2f}s ago"
+        )
         if time_s > AGENT_OFFLINE_TIMEOUT:
             logger.info(f"agent {agent.name} is now considered to be offline")
             state.agents.pop(token)
@@ -113,16 +120,20 @@ async def healthcheck():
 
     await channel.close()
 
+
 async def healthcheck_task():
     await state.init_done.wait()
     while True:
         await asyncio.sleep(PING_INTERVAL)
         await healthcheck()
 
+
 async def handle_login(message: abc.AbstractIncomingMessage, body: dict):
     data = LoginRequest(**body)
     logger.info(f"agent `Agent Name` with token `{data.Token}` has logged in")
-    await message.channel.queue_bind(data.Queue, CONTROL_EXCHANGE, routing_key=data.Queue)
+    await message.channel.queue_bind(
+        data.Queue, CONTROL_EXCHANGE, routing_key=data.Queue
+    )
 
     # dummy ok response, will integrate with auth
     response = LoginResponse(Success=True, Name="Agent Name")
@@ -132,12 +143,14 @@ async def handle_login(message: abc.AbstractIncomingMessage, body: dict):
     agent = Agent(name="Agent Name", last_ping=time.monotonic(), routing_key=data.Queue)
     state.agents[data.Token] = agent
 
+
 async def on_message(message: abc.AbstractIncomingMessage):
     await message.ack()
     body_text = message.body.decode()
     try:
         body: dict = json.loads(body_text)
-        if type(body) is not dict: raise ValueError()
+        if type(body) is not dict:
+            raise ValueError()
         request = body["Type"]
         body.pop("Type")
     except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -156,7 +169,10 @@ async def on_message(message: abc.AbstractIncomingMessage):
             logger.message("received unknown response uuid, ignoring")
             return
 
-        await state.open_requests[message.correlation_id].resolve(body, message.correlation_id)
+        await state.open_requests[message.correlation_id].resolve(
+            body, message.correlation_id
+        )
+
 
 async def test_db_connect():
     engine = engine_finder()
@@ -164,13 +180,18 @@ async def test_db_connect():
     await engine.start_connection_pool()
     await engine.close_connection_pool()
 
+
 async def main():
     await test_db_connect()
     state.connection = await connect_robust(RABBITMQ_URL)
     channel = await state.connection.channel()
-    control_exc = await channel.declare_exchange(CONTROL_EXCHANGE, ExchangeType.TOPIC, arguments={
-        "x-message-ttl": 15_000,
-        })
+    control_exc = await channel.declare_exchange(
+        CONTROL_EXCHANGE,
+        ExchangeType.TOPIC,
+        arguments={
+            "x-message-ttl": 15_000,
+        },
+    )
     queue = await channel.declare_queue(durable=False, exclusive=True)
     await queue.bind(control_exc, AGENT_PRIVATE)
     await queue.bind(control_exc, queue.name)
