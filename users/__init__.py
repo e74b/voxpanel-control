@@ -96,5 +96,41 @@ async def grant_scopes(username: str, scopes: str | list[str]):
     new_scopes = [Scope(user=user, scope=scope) for scope in scopes]
     await Scope.insert(*new_scopes)
 
-def revoke_scope(): ...
+async def revoke_scope(username: str, scopes: str | list[str]): 
+    """
+    Revoke user permission to call all scope methods
+
+    If the scope or any of the provided scopes are not aldready granted,
+    the function will not raise an error. 
+
+    Args:
+        username: username of user to revoke scope from
+        scopes: the scope or scopes to be revoked
+
+    Returns:
+        list[str]: the scopes that were deleted
+
+    Raises:
+        UserNotExists: username
+    """
+
+
+    if isinstance(scopes, list):
+        scopes = [scopes]
+    # this is an extra db query
+    # i'm not too sure how to raise an error in the second query if the user
+    # is not found, it just returns empty which may also mean that no scopes
+    # were deleted
+
+    user_exists = await User.exists().where(User.username == username)
+    if not user_exists:
+        raise UserNotExists()
+
+    result = await Scope.delete().where(
+            Scope.user.username == username
+        ).where(
+            Scope.scope.is_in(*scopes)
+        ).returning(Scope.scope)
+    return [record["scope"] for record in result]
+
 def get_scopes(): ...

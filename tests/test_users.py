@@ -35,3 +35,15 @@ async def test_user_grant_scope():
 
     with pytest.raises(UserNotExists):
         await users.grant_scopes("test_username_123213", scopes_to_grant)
+
+@pytest.mark.asyncio
+async def test_user_revoke_scope():
+    scopes_to_revoke = ["test:scope1", "test:scope2", "test:scope4"]
+    revoked = await users.revoke_scope("test_username", scopes_to_revoke)
+
+    if "test:scope4" in revoked:
+        raise ValueError("deleted scope that should exist???")
+
+    assert ["test:scope1", "test:scope2"] == revoked
+    with pytest.raises(UserNotExists):
+        await users.revoke_scope("test_username_123213", scopes_to_revoke)
