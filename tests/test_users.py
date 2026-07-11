@@ -2,6 +2,7 @@ import pytest
 import users
 from users.tables import User, Scope
 from users.exceptions import UserNotExists, InvalidPassword, UserExists
+import config
 
 
 @pytest.mark.asyncio
@@ -50,6 +51,14 @@ async def test_user_revoke_scope():
     if "test:scope4" in revoked:
         raise ValueError("deleted scope that should exist???")
 
-    assert ["test:scope1", "test:scope2"] == revoked
+    assert set(["test:scope1", "test:scope2"]) == set(revoked)
     with pytest.raises(UserNotExists):
         await users.revoke_scope("test_username_123213", scopes_to_revoke)
+
+@pytest.mark.asyncio
+async def test_user_get_scopes():
+    scopes = await users.get_scopes("test_username")
+    assert set(scopes) == set(["test:scope3", *config.DEFAULT_USER_SCOPES])
+
+    with pytest.raises(UserNotExists):
+        await users.get_scopes("test_username_123213")

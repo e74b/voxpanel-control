@@ -81,7 +81,7 @@ async def grant_scopes(username: str, scopes: str | list[str]):
         None
 
     Raises:
-        UserNotExists: username does not exist
+        UserNotExists: user does not exist
     """
 
     user = await User.objects().get(User.username == username)
@@ -110,7 +110,7 @@ async def revoke_scope(username: str, scopes: str | list[str]):
         list[str]: the scopes that were deleted
 
     Raises:
-        UserNotExists: username
+        UserNotExists: user does not exist
     """
 
     if isinstance(scopes, list):
@@ -133,4 +133,24 @@ async def revoke_scope(username: str, scopes: str | list[str]):
     return [record["scope"] for record in result]
 
 
-def get_scopes(): ...
+async def get_scopes(username: str) -> list[str]:
+    """
+    Get the scopes granted to a user
+
+    Args:
+        username: username of user
+
+    Returns:
+        list[str]: scopes granted
+
+    Raises:
+        UserNotExists: user does not exist
+
+    """
+
+    user = await User.objects().where(User.username == username).first()
+    if user is None:
+        raise UserNotExists()
+
+    scopes = await Scope.select(Scope.scope).where(Scope.user == user)
+    return [scope["scope"] for scope in scopes]
