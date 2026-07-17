@@ -6,7 +6,7 @@ import logging
 import json
 import packets
 import asyncio
-from typing import Callable
+from typing import Callable, Type
 from . import auth
 from .exceptions import AgentNotExist, InvalidToken
 
@@ -14,7 +14,7 @@ class ControlNetworkHandler():
 
     connection: AbstractConnection
     process_queue: Queue 
-    HANDLER_LUT = {}
+    HANDLER_LUT: dict[Type[packets.BasePacket], Callable]
 
     def __init__(self):
         self.process_queue = Queue()
@@ -25,7 +25,7 @@ class ControlNetworkHandler():
         # eg: 4 instances of the class can be run on 4 different threads without interfering
         # each instance will be treated like an independant control agent
     
-    def register_packet_handler(self, packet: packets.BasePacket, handler: Callable[packets.BasePacket, None]):
+    def register_packet_handler(self, packet: Type[packets.BasePacket], handler: Callable[packets.BasePacket, None]):
         self.HANDLER_LUT[packet] = handler
 
     async def setup(self):
