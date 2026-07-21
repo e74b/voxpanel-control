@@ -6,7 +6,7 @@ class BasePacket:
     ...
 
 def jsonify(packet: BasePacket):
-    return json.dumps(asdict(packet))
+    return json.dumps(asdict(packet)).encode()
 
 @dataclass()
 class LoginRequest(BasePacket):
@@ -18,6 +18,16 @@ class LoginRequest(BasePacket):
 class LoginResponse(BasePacket):
     Success: bool
     Name: str
+
+@dataclass()
+class HealthCheck(BasePacket):
+    Time: float
+    Type: str = "ping"
+
+@dataclass()
+class HealthCheckResponse(BasePacket):
+    Time: float
+
 
 PACKET_LUT = {
         "login": LoginRequest

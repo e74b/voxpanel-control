@@ -2,6 +2,7 @@ import aio_pika
 from aio_pika.abc import AbstractConnection, ExchangeType, AbstractIncomingMessage
 from asyncio import Queue, QueueShutDown
 from config import RABBITMQ_URL, CONTROL_EXCHANGE, AGENT_PRIVATE
+import config
 import logging
 import json
 import packets
@@ -9,16 +10,33 @@ import asyncio
 from typing import Callable, Type
 from . import auth
 from .exceptions import AgentNotExist, InvalidToken
+import dataclasses
+import time
+from uuid import uuid4
+
+@dataclasses.dataclass()
+class ConnectedAgentPeer:
+    last_ping: float 
+    name: str
+    uuid: str
+    queue: str
 
 class ControlNetworkHandler():
 
     connection: AbstractConnection
     process_queue: Queue 
     HANDLER_LUT: dict[Type[packets.BasePacket], Callable]
+    peers: dict[str, ConnectedAgentPeer]
+    peer_lock: asyncio.Lock
 
     def __init__(self):
         self.process_queue = Queue()
+        self.HANDLER_LUT = {}
+        self.peers = {}
+
         self.register_packet_handler(packets.LoginRequest, self._login)
+        self.register_packet_handler(packets.HealthCheckResponse, print)
+        self.peer_lock = asyncio.Lock()
         # queue is used here to prevent concurrency issues and avoid
         # requiring a ton of locks
         # allows each instance to be an independant instance
@@ -92,6 +110,10 @@ class ControlNetworkHandler():
         # threading issues and needing a ton of locks
 
     async def worker_start(self):
+        loop = asyncio.get_running_loop()
+        loop.create_task(self._healthcheck_task(), name="healthcheck")
+        logging.warning("scheduled healthcheck task")
+
         while True:
             packet = await self.process_queue.get()
             await self.HANDLER_LUT[type(packet)](packet)
@@ -109,7 +131,16 @@ class ControlNetworkHandler():
         await queue.bind(self.exchange, reply_to)
         try:
             meta = await auth.authenticate_agent(packet.Uuid, packet.Token)
-            auth_success = True 
+            auth_success = True
+            await self.peer_lock.acquire()
+            self.peers[packet.Uuid] = ConnectedAgentPeer(
+                    uuid=packet.Uuid,
+                    name=meta.name,
+                    last_ping=time.monotonic(),
+                    queue=queue.name
+                    )
+            self.peer_lock.release()
+
         except (InvalidToken, AgentNotExist):
             await queue.unbind(self.exchange, reply_to)
             auth_success = False
@@ -119,9 +150,49 @@ class ControlNetworkHandler():
                 Name=meta.name if auth_success else ""
                 )
         raw = packets.jsonify(response)
-        message = aio_pika.Message(raw.encode())
+        message = aio_pika.Message(raw)
         await self.exchange.publish(message, reply_to)
 
         if not auth_success:
             return
 
+
+    async def _healthcheck_send(self):
+        await asyncio.sleep(config.PING_INTERVAL - config.PING_TIMEOUT)
+        now = time.monotonic()
+        channels = [peer.queue for (_, peer) in self.peers.items()]
+        packet = packets.HealthCheck(Time=now)
+        corrid = uuid4().hex
+
+        message = aio_pika.Message(
+                packets.jsonify(packet),
+                reply_to=self.rpc_queue,
+                correlation_id=corrid
+                )
+
+
+        for channel in channels:
+            await self.exchange.publish(message, channel)
+        await asyncio.sleep(config.PING_TIMEOUT)
+
+        await self.peer_lock.acquire()
+        peers_to_pop = []
+        for uuid, peer in self.peers.items():
+            delta = peer.last_ping - now
+            if (delta > config.PING_TIMEOUT):
+                self.logger.warning(f"{peer.name} missed a ping.")
+            if (delta > config.AGENT_OFFLINE_TIMEOUT):
+                continue
+            self.logger.warning(f"agent {peer.name} ({peer.uuid}) has not responded in {delta:.2f}s, removing from network")
+            peers_to_pop.append(uuid)
+
+        for peer in peers_to_pop:
+            self.peers.pop(peer)
+        self.peer_lock.release()
+
+
+
+    async def _healthcheck_task(self):
+        while True:
+            await self._healthcheck_send()
+            self.logger.debug("New healthcheck cycle")
