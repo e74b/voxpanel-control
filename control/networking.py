@@ -9,7 +9,6 @@ import packets
 import asyncio
 from typing import Callable, Type
 from . import auth
-from .exceptions import AgentNotExist, InvalidToken
 import dataclasses
 import time
 from uuid import uuid4
@@ -37,8 +36,6 @@ class ControlNetworkHandler():
         self.PACKET_LUT = {}
         self.peers = {}
 
-        self.register_packet_handler("login", packets.LoginRequest, self._login)
-        self.register_packet_handler("ping_response", packets.HealthCheckResponse, print_)
         self.peer_lock = asyncio.Lock()
         # queue is used here to prevent concurrency issues and avoid
         # requiring a ton of locks
@@ -120,42 +117,12 @@ class ControlNetworkHandler():
 
         while True:
             packet = await self.process_queue.get()
-            await self.HANDLER_LUT[type(packet)](packet)
+            await self.HANDLER_LUT[type(packet)](self, packet)
 
     async def worker_stop(self):
         self.process_queue.shutdown()
         # TODO: implement console warning and timeouts
         await self.process_queue.join()
-
-    async def _login(self, packet: packets.LoginRequest):
-        self.logger.warning(f"login attempt by {packet.Uuid} {packet.Token}")
-        reply_to = packet.Queue
-
-        queue = await self.channel.get_queue(reply_to)
-        await queue.bind(self.exchange, reply_to)
-        try:
-            meta = await auth.authenticate_agent(packet.Uuid, packet.Token)
-            auth_success = True
-            await self.peer_lock.acquire()
-            self.peers[packet.Uuid] = ConnectedAgentPeer(
-                    uuid=packet.Uuid,
-                    name=meta.name,
-                    last_ping=time.monotonic(),
-                    queue=queue.name
-                    )
-            self.peer_lock.release()
-
-        except (InvalidToken, AgentNotExist):
-            await queue.unbind(self.exchange, reply_to)
-            auth_success = False
-
-        response = packets.LoginResponse(
-                Success=auth_success,
-                Name=meta.name if auth_success else ""
-                )
-        raw = packets.jsonify(response)
-        message = aio_pika.Message(raw)
-        await self.exchange.publish(message, reply_to)
 
 
     async def _healthcheck_send(self):
