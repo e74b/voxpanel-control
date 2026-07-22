@@ -26,9 +26,4 @@ class HealthCheck(BasePacket):
 
 @dataclass()
 class HealthCheckResponse(BasePacket):
-    Time: float
-
-
-PACKET_LUT = {
-        "login": LoginRequest
-        }
+    Type: str = "ping_response"

@@ -21,21 +21,24 @@ class ConnectedAgentPeer:
     uuid: str
     queue: str
 
+
 class ControlNetworkHandler():
 
     connection: AbstractConnection
     process_queue: Queue 
     HANDLER_LUT: dict[Type[packets.BasePacket], Callable]
+    PACKET_LUT: dict[str, Type[packets.BasePacket]]
     peers: dict[str, ConnectedAgentPeer]
     peer_lock: asyncio.Lock
 
     def __init__(self):
         self.process_queue = Queue()
         self.HANDLER_LUT = {}
+        self.PACKET_LUT = {}
         self.peers = {}
 
-        self.register_packet_handler(packets.LoginRequest, self._login)
-        self.register_packet_handler(packets.HealthCheckResponse, print)
+        self.register_packet_handler("login", packets.LoginRequest, self._login)
+        self.register_packet_handler("ping_response", packets.HealthCheckResponse, print_)
         self.peer_lock = asyncio.Lock()
         # queue is used here to prevent concurrency issues and avoid
         # requiring a ton of locks
@@ -43,8 +46,9 @@ class ControlNetworkHandler():
         # eg: 4 instances of the class can be run on 4 different threads without interfering
         # each instance will be treated like an independant control agent
     
-    def register_packet_handler(self, packet: Type[packets.BasePacket], handler: Callable[packets.BasePacket, None]):
+    def register_packet_handler(self, identifier: str, packet: Type[packets.BasePacket], handler: Callable[packets.BasePacket, None]):
         self.HANDLER_LUT[packet] = handler
+        self.PACKET_LUT[identifier] = packet
 
     async def setup(self):
         self.logger = logging.getLogger("control")
@@ -77,7 +81,7 @@ class ControlNetworkHandler():
             raise ValueError("invalid packet with missing type field")
         # i have a problem, i know
 
-        response_class = packets.PACKET_LUT.get(request_type, None)
+        response_class = self.PACKET_LUT.get(request_type, None)
 
         if response_class is None:
             raise ValueError("received valid packet of unknown type, discarding.")
@@ -112,7 +116,7 @@ class ControlNetworkHandler():
     async def worker_start(self):
         loop = asyncio.get_running_loop()
         loop.create_task(self._healthcheck_task(), name="healthcheck")
-        logging.warning("scheduled healthcheck task")
+        logging.info("healthcheck task started, starting consume worker")
 
         while True:
             packet = await self.process_queue.get()
@@ -153,14 +157,10 @@ class ControlNetworkHandler():
         message = aio_pika.Message(raw)
         await self.exchange.publish(message, reply_to)
 
-        if not auth_success:
-            return
-
 
     async def _healthcheck_send(self):
         await asyncio.sleep(config.PING_INTERVAL - config.PING_TIMEOUT)
         now = time.monotonic()
-        channels = [peer.queue for (_, peer) in self.peers.items()]
         packet = packets.HealthCheck(Time=now)
         corrid = uuid4().hex
 
@@ -170,7 +170,7 @@ class ControlNetworkHandler():
                 correlation_id=corrid
                 )
 
-
+        channels = [peer.queue for (_, peer) in self.peers.items()]
         for channel in channels:
             await self.exchange.publish(message, channel)
         await asyncio.sleep(config.PING_TIMEOUT)
@@ -178,7 +178,7 @@ class ControlNetworkHandler():
         await self.peer_lock.acquire()
         peers_to_pop = []
         for uuid, peer in self.peers.items():
-            delta = peer.last_ping - now
+            delta = now - peer.last_ping
             if (delta > config.PING_TIMEOUT):
                 self.logger.warning(f"{peer.name} missed a ping.")
             if (delta > config.AGENT_OFFLINE_TIMEOUT):
@@ -196,3 +196,4 @@ class ControlNetworkHandler():
         while True:
             await self._healthcheck_send()
             self.logger.debug("New healthcheck cycle")
+
